@@ -9,8 +9,41 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
     </script>
 </head>
-<body>
-    <p>ここに数学の式を表示します：\(x^2 + y^2 = z^2\)</p>
-    <p>\(\alpha,\ \gamma_{4}\)</p>
-</body>
+<form method="post" action="{{ url_for('register') }}" class="input">
+  \(k={{k}}\) <br>
+  <p> \(n\) <input type="number" name="n" value={{n}} required> \( \ \ n = {{n}} \ \ \) 
+      <input type="submit" value="Run">
+  </p>
+  <p> \(t\) <input type="number" name="tt" value={{tt}} required> \( \ \ t = {{tt}} \ \ \) 
+    <input type="submit" value="Run">
+  </p>
+  
+  <p>
+    <label><input type="radio" name="display_mode" value="relation" checked>Relation</label> &nbsp;
+    
+    {% if display_mode == "E-image" %}
+        <label><input type="radio" name="display_mode" value="E-image" checked>\(E\)-image</label> &nbsp;
+    {% else %}
+        <label><input type="radio" name="display_mode" value="E-image">\(E\)-image</label> &nbsp;
+    {% endif %}
+    
+    {% if display_mode == "H-image" %}
+        <label><input type="radio" name="display_mode" value="H-image" checked>\(H\)-image</label> &nbsp;
+    {% else %}
+        <label><input type="radio" name="display_mode" value="H-image">\(H\)-image</label> &nbsp;
+    {% endif %}
+    
+    {% if display_mode == "P-image" %}
+        <label><input type="radio" name="display_mode" value="P-image" checked>\(\Delta\)-image</label> &nbsp;
+    {% else %}
+        <label><input type="radio" name="display_mode" value="P-image">\(\Delta\)-image</label> &nbsp;
+    {% endif %}
+    
+    {% if display_mode == "stable" %}
+        <label><input type="radio" name="display_mode" value="stable" checked>Stable</label> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+    {% else %}
+        <label><input type="radio" name="display_mode" value="stable">Stable</label> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+    {% endif %}
+  </p>
+</form>
 </html>
