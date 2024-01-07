@@ -35,10 +35,12 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       Spock >=0.14
+    , aeson
     , base >=4.7 && <5
     , mtl
     , network
     , persistent-sqlite
+    , sqlite-simple
     , text
     , wai
     , wai-extra
@@ -56,11 +58,13 @@ executable spock20240105-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Spock >=0.14
+    , aeson
     , base >=4.7 && <5
     , mtl
     , network
     , persistent-sqlite
     , spock20240105
+    , sqlite-simple
     , text
     , wai
     , wai-extra
@@ -79,11 +83,13 @@ test-suite spock20240105-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Spock >=0.14
+    , aeson
     , base >=4.7 && <5
     , mtl
     , network
     , persistent-sqlite
     , spock20240105
+    , sqlite-simple
     , text
     , wai
     , wai-extra

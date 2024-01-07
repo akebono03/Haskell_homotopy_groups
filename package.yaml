@@ -29,6 +29,8 @@ dependencies:
 - network
 - wai-middleware-static
 - persistent-sqlite
+- sqlite-simple
+- aeson
 # - wai-static
 
 ghc-options:
