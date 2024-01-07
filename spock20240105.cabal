@@ -38,6 +38,7 @@ library
     , base >=4.7 && <5
     , mtl
     , network
+    , persistent-sqlite
     , text
     , wai
     , wai-extra
@@ -58,6 +59,7 @@ executable spock20240105-exe
     , base >=4.7 && <5
     , mtl
     , network
+    , persistent-sqlite
     , spock20240105
     , text
     , wai
@@ -80,6 +82,7 @@ test-suite spock20240105-test
     , base >=4.7 && <5
     , mtl
     , network
+    , persistent-sqlite
     , spock20240105
     , text
     , wai

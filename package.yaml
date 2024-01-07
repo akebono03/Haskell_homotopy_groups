@@ -28,6 +28,7 @@ dependencies:
 - wai-extra
 - network
 - wai-middleware-static
+- persistent-sqlite
 # - wai-static
 
 ghc-options:

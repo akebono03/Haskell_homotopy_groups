@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<header>
+    <style>
+        form{
+            color: red;
+            font-size: 100%;
+        }
+    </style>
+</header>
+
+<form method="post" action="{{ url_for('register') }}" class="input">
+    Enter \(n\) and \(k\) .<br>
+    <p> \(n\) <input type="number" name="n" value={{n}} required> \( \ \ n = {{n}} \ \ \) 
+        <input type="submit" value="Run"></p>
+    <p> \(k\) <input type="number" name="k" value={{k}} required> \( \ \ k = {{k}} \ \ \) 
+        <input type="submit" value="Run"></p>
+</form>
+
+<table border="1" style="border-collapse: collapse">
+    <tr>
+        {% for i in range(4) %}
+        <th width="60"><font color=blue> \( {{ HoGroup[i] }} \) </font></th>
+        <th width="60"></th>
+        <th width="60"><font color=blue> \( {{ Arrow[i] }} \) </font></th>
+        <th width="60"></th>
+        {% endfor %}
+        <th width="60"><font color=blue> \( {{ HoGroup[4] }} \) </font></th>
+    </tr>
+    {% for j in range(m_d_sum) %}
+    <tr align="center">
+        {% for i in range(4) %}
+        <td><font color=blue> \( {{ table_group[i][j] }} \) </font></td>
+        <td> \( {{ table_gen[i][j] }} \) </td>
+        <td> \( {{ table_arrow[i][j] }} \) </td>
+        <td> \( {{ table_image[i][j] }} \) </td>
+        {% endfor %}
+        <td><font color=blue> \( {{ table_group[4][j] }} \) </font></td>
+        <td width="60"> \( {{ table_gen[4][j] }} \) </td>
+    </tr>
+    {% endfor %}
+    <tr><td colspan="18">　</td></tr>
+    {% for j in range(m_d_sum) %}
+    <tr>
+        {% for i in range(4) %}
+        <td></td>
+        <td colspan="3"> \( \ {{ table_ref[i][j] }} \ \) </td>
+        {% endfor %}
+        <td></td>
+        <td colspan="3"> \( \ {{ table_ref[4][j] }} \ \) </td>
+    </tr>
+    {% endfor %}
+</table>
+
+
+{% endblock %}
