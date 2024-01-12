@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Main (main) where
 import Web.Spock
@@ -11,13 +12,14 @@ import Text.Read (readMaybe)
 import Database.SQLite.Simple (open, close, query, query_, field, Only(..), FromRow(..), Connection)
 import Data.Aeson (ToJSON, toJSON, object, (.=))
 import Text.Printf (printf)
+import Control.Applicative ((<|>))
 
 -- Sphere 型の定義
 data Sphere = Sphere
   { sphereK :: Int
   , sphereN :: Int
   , sphereId :: Int
-  , orders :: String
+  , orders :: Either Int String  -- 整数または文字列を格納する Either 型
   , generator :: Maybe String
   , p :: Maybe String
   , p_coe :: Maybe String
@@ -28,15 +30,31 @@ data Sphere = Sphere
   , element :: Maybe String
   , gen_coe :: Maybe String
   , hyouji :: Maybe String
-  , orders2 :: String
+  , orders2 :: Either Int String  -- 整数または文字列を格納する Either 型
   -- その他のカラムに対応するフィールドを追加
   } deriving (Show)
 
 -- -- FromRow型クラスのインスタンスを作成
 instance FromRow Sphere where
-  fromRow = Sphere <$> field <*> field <*> field <*> field <*> field 
-                   <*> field <*> field <*> field <*> field <*> field
-                   <*> field <*> field <*> field <*> field <*> field
+  fromRow = Sphere
+    <$> field -- sphereK
+    <*> field -- sphereN
+    <*> field -- sphereId
+    <*> (Left <$> field <|> Right <$> field) -- orders
+    <*> field -- generator
+    <*> field -- p
+    <*> field -- p_coe
+    <*> field -- e
+    <*> field -- e_coe
+    <*> field -- h
+    <*> field -- h_coe
+    <*> field -- element
+    <*> field -- gen_coe
+    <*> field -- hyouji
+    <*> (Left <$> field <|> Right <$> field) -- orders2
+--   fromRow = Sphere <$> field <*> field <*> field <*> field <*> field 
+--                    <*> field <*> field <*> field <*> field <*> field
+--                    <*> field <*> field <*> field <*> field <*> field
   -- 必要に応じて、他のフィールドに対応する field を追加
 
 -- 安全な整数変換関数
@@ -102,19 +120,19 @@ sphereToHtml :: Sphere -> T.Text
 sphereToHtml (Sphere k n sId ord gene pp pp_coe ee ee_coe hh hh_coe
               element gen_coe hyouji ord2) = T.concat 
   ["<li>"
-  , "ID: ", T.pack $ show sId
-  , ", K: ", T.pack $ show k
-  , ", N: ", T.pack $ show n
+  , "k: ", T.pack $ show k
+  , ", n: ", T.pack $ show n
+  , ", id: ", T.pack $ show sId
   , ", order: ", T.pack $ show ord
   , ", generator: ", T.pack $ stripQuotes (fmap show gene)
   , ", P: ", T.pack $ stripQuotes (fmap show pp)
-  , ", P_coe: ", T.pack $ show pp_coe
+  -- , ", P_coe: ", T.pack $ show pp_coe
   , ", E: ", T.pack $ stripQuotes (fmap show ee)
-  , ", E_coe: ", T.pack $ show ee_coe
+  -- , ", E_coe: ", T.pack $ show ee_coe
   , ", H: ", T.pack $ stripQuotes (fmap show hh)
-  , ", H_coe: ", T.pack $ show hh_coe
+  -- , ", H_coe: ", T.pack $ show hh_coe
   , ", Element: ", T.pack $ show element
-  , ", gen_coe: ", T.pack $ show gen_coe
+  -- , ", gen_coe: ", T.pack $ show gen_coe
   , ", hyouji: ", T.pack $ stripQuotes (fmap show hyouji)
   , ", order2: ", T.pack $ show ord2
   , "</li>"]
