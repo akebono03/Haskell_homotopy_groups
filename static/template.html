@@ -12,12 +12,22 @@
 
 <form method="post" action="/calculate" class="input">
     Enter \(n\) and \(k\) .<br>
-    <p> \(n\) <input type="number" name="n" value={{n}} required> \( \ \ n = {{n}} \ \ \) 
+    <p> \(n\) <input type="number" name="n" value={n} required> \( \ \ n = {{n}} \ \ \) 
         <input type="submit" value="Run"></p>
-    <p> \(k\) <input type="number" name="k" value={{k}} required> \( \ \ k = {{k}} \ \ \) 
+    <p> \(k\) <input type="number" name="k" value={k} required> \( \ \ k = {{k}} \ \ \) 
         <input type="submit" value="Run"></p>
 </form>
 
+<body>
+    <h1>Sphere Calculation Result</h1>
+    <div>
+        <p>Calculation Result: {result}</p>
+    </div>
+    <h2>Sphere List</h2>
+    <div>
+        {sphereList}
+    </div>
+</body>
 
 <!-- <form method="post" action="{{ url_for('register') }}" class="input">
   \(k={{k}}\) <br>
