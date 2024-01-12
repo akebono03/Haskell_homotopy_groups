@@ -9,17 +9,18 @@ import qualified Data.Text.IO as TIO
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
 import Text.Read (readMaybe)
-import Database.SQLite.Simple (open, close, query_, field, FromRow(..), Connection)
+import Database.SQLite.Simple (open, close, query, query_, field, Only(..), FromRow(..), Connection)
 import Data.Aeson (ToJSON, toJSON, object, (.=))
 -- import Data.Maybe (fromMaybe)
+import Text.Printf (printf)
 
 -- Sphere 型の定義
 data Sphere = Sphere
-  { sphereId :: Float
-  , sphereK :: Float
-  , sphereN :: Float
-  , orders :: Float
-  , generator :: String
+  { sphereK :: Int
+  , sphereN :: Int
+  , sphereId :: Int
+  , orders :: String
+  , generator :: Maybe String
   , p :: Maybe String
   , p_coe :: Maybe String
   -- その他のカラムに対応するフィールドを追加
@@ -33,9 +34,9 @@ instance FromRow Sphere where
 -- ToJSONインスタンスの定義
 instance ToJSON Sphere where
   toJSON s = object 
-    [ "id" .= sphereId s
-    , "k" .= sphereK s
+    [ "k" .= sphereK s
     , "n" .= sphereN s
+    , "id" .= sphereId s
     -- 他のフィールドも必要に応じて追加
     ]
 
@@ -64,12 +65,16 @@ appWithConnection conn = do
 
   post "calculate" $ do
     formData <- params
-    spheres <- liftIO $ query_ conn "SELECT id, k, n, orders, generator, P, P_coe FROM sphere WHERE n = 13 and k = 0" :: ActionCtxT () (WebStateM () () ()) [Sphere]
     let n = maybe 0 (readInt . T.unpack) (lookup "n" formData)
         k = maybe 0 (readInt . T.unpack) (lookup "k" formData)
         result = n + k
-        htmlContent = generateHtmlForSphere spheres
+        queryStr = "SELECT k, n, id, orders, generator, P, P_coe \
+        \FROM sphere WHERE n = ? and k = ?"
+        -- queryStr = T.pack $ printf "SELECT k, n, id, orders, generator, P, P_coe FROM sphere WHERE n = 39 and k = %d" k
+    spheres <- liftIO $ query conn queryStr (n, k) :: ActionCtxT () (WebStateM () () ()) [Sphere]
+    let htmlContent = generateHtmlForSphere spheres
         htmlString = T.unpack htmlContent
+
         -- ss = if htmlString == "" then "aaaa" else "bbbb"
     -- html $ T.pack $ "n + k = " <> (show result) <> htmlString
     -- 'template2.html' を読み込む
@@ -101,11 +106,12 @@ generateHtmlForSphere spheres = T.concat
   ]
 
 sphereToHtml :: Sphere -> T.Text
-sphereToHtml (Sphere sId k n ord gene pp pp_coe) =
-  T.concat ["<li>", "ID: ", T.pack $ show sId, ", K: ", T.pack $ show k, ", N: ", T.pack $ show n, ", order: ", T.pack $ show ord, ", generator: ", T.pack $ show gene, ", P: ", T.pack $ stripQuotes (fmap show pp), ", P_coe: ", T.pack $ show pp_coe, "</li>"]
+sphereToHtml (Sphere k n sId ord gene pp pp_coe) =
+  T.concat ["<li>", "ID: ", T.pack $ show sId, ", K: ", T.pack $ show k, ", N: ", T.pack $ show n, ", order: ", T.pack $ show ord, ", generator: ", T.pack $ stripQuotes (fmap show gene), ", P: ", T.pack $ stripQuotes (fmap show pp), ", P_coe: ", T.pack $ show pp_coe, "</li>"]
 
 stripQuotes :: Maybe String -> String
-stripQuotes (Just str) = "\\(" ++ stripQuotesHelper str ++ "\\)"
+stripQuotes (Just str) = "\\(" ++ (doubleBackslash . stripQuotesHelper) str ++ "\\)"
+-- stripQuotes (Just str) = "\\(Lem5.14, \\ H(\\sigma_8)=\\iota_{15}\\alpha_{5}" ++ stripQuotesHelper str ++ "\\)"
 stripQuotes Nothing    = ""
 
 stripQuotesHelper :: String -> String
@@ -116,7 +122,13 @@ stripQuotesHelper str =
                   _        -> str
     _        -> str
 
-
+-- バックスラッシュが1つの場合に2つに書き換える関数
+doubleBackslash :: String -> String
+doubleBackslash [] = []
+doubleBackslash (x:xs)
+  | x == '\\' = " \\" ++ doubleBackslash xs
+  | otherwise = [x] ++ doubleBackslash xs
+-- doubleBackslash = concatMap (\c -> if c == '\\' then " \\" else [c])
 
 
 
