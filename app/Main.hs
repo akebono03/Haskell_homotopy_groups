@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main (main) where
-
 import Web.Spock
 import Web.Spock.Config
 import Network.Wai.Middleware.Static (staticPolicy, addBase)
@@ -11,7 +10,6 @@ import qualified Data.Text as T
 import Text.Read (readMaybe)
 import Database.SQLite.Simple (open, close, query, query_, field, Only(..), FromRow(..), Connection)
 import Data.Aeson (ToJSON, toJSON, object, (.=))
--- import Data.Maybe (fromMaybe)
 import Text.Printf (printf)
 
 -- Sphere 型の定義
@@ -23,22 +21,23 @@ data Sphere = Sphere
   , generator :: Maybe String
   , p :: Maybe String
   , p_coe :: Maybe String
+  , e :: Maybe String
+  , e_coe :: Maybe String
+  , h :: Maybe String
+  , h_coe :: Maybe String
+  , element :: Maybe String
+  , gen_coe :: Maybe String
+  , hyouji :: Maybe String
+  , orders2 :: String
   -- その他のカラムに対応するフィールドを追加
   } deriving (Show)
 
 -- -- FromRow型クラスのインスタンスを作成
 instance FromRow Sphere where
-  fromRow = Sphere <$> field <*> field <*> field <*> field <*> field <*> field <*> field
+  fromRow = Sphere <$> field <*> field <*> field <*> field <*> field 
+                   <*> field <*> field <*> field <*> field <*> field
+                   <*> field <*> field <*> field <*> field <*> field
   -- 必要に応じて、他のフィールドに対応する field を追加
-
--- ToJSONインスタンスの定義
-instance ToJSON Sphere where
-  toJSON s = object 
-    [ "k" .= sphereK s
-    , "n" .= sphereN s
-    , "id" .= sphereId s
-    -- 他のフィールドも必要に応じて追加
-    ]
 
 -- 安全な整数変換関数
 readInt :: String -> Int
@@ -68,31 +67,25 @@ appWithConnection conn = do
     let n = maybe 0 (readInt . T.unpack) (lookup "n" formData)
         k = maybe 0 (readInt . T.unpack) (lookup "k" formData)
         result = n + k
-        queryStr = "SELECT k, n, id, orders, generator, P, P_coe \
+        queryStr = "SELECT k, n, id, orders, generator, \
+        \P, P_coe, E, E_coe, H, H_coe, \
+        \Element, gen_coe, hyouji, orders2 \
         \FROM sphere WHERE n = ? and k = ?"
-        -- queryStr = T.pack $ printf "SELECT k, n, id, orders, generator, P, P_coe FROM sphere WHERE n = 39 and k = %d" k
-    spheres <- liftIO $ query conn queryStr (n, k) :: ActionCtxT () (WebStateM () () ()) [Sphere]
+    spheres <- liftIO $ query conn queryStr (n, k) 
+            :: ActionCtxT () (WebStateM () () ()) [Sphere]
     let htmlContent = generateHtmlForSphere spheres
         htmlString = T.unpack htmlContent
 
-        -- ss = if htmlString == "" then "aaaa" else "bbbb"
-    -- html $ T.pack $ "n + k = " <> (show result) <> htmlString
     -- 'template2.html' を読み込む
-    templateContent <- liftIO $ TIO.readFile "static/template2.html"
+    templateContent <- liftIO $ TIO.readFile "static/template.html"
     -- プレースホルダーを実際の値で置換
-    let finalHtml = T.replace "{result}" (T.pack $ show result) $
-                    T.replace "{sphereList}" (T.pack $ htmlString) templateContent
+    let finalHtml = 
+          T.replace "{k}" (T.pack $ show k) $
+          T.replace "{n}" (T.pack $ show n) $
+          T.replace "{result}" (T.pack $ show result) $
+          T.replace "{sphereList}" (T.pack $ htmlString) templateContent
     html finalHtml
     
---   -- ここでデータベースを利用するロジックを追加
---   get "calculate" $ do
---     spheres <- liftIO $ query_ conn "SELECT id, k, n, orders, generator FROM sphere WHERE n = 3 and k = 8" :: ActionCtxT () (WebStateM () () ()) [Sphere]
---     let htmlContent = generateHtmlForSphere spheres
---     html htmlContent
---     -- 取得したデータをレスポンスとして返す
---     -- json people
-
-
 -- Sphere のリストを HTML に変換する関数
 generateHtmlForSphere :: [Sphere] -> T.Text
 generateHtmlForSphere spheres = T.concat
@@ -106,12 +99,30 @@ generateHtmlForSphere spheres = T.concat
   ]
 
 sphereToHtml :: Sphere -> T.Text
-sphereToHtml (Sphere k n sId ord gene pp pp_coe) =
-  T.concat ["<li>", "ID: ", T.pack $ show sId, ", K: ", T.pack $ show k, ", N: ", T.pack $ show n, ", order: ", T.pack $ show ord, ", generator: ", T.pack $ stripQuotes (fmap show gene), ", P: ", T.pack $ stripQuotes (fmap show pp), ", P_coe: ", T.pack $ show pp_coe, "</li>"]
+sphereToHtml (Sphere k n sId ord gene pp pp_coe ee ee_coe hh hh_coe
+              element gen_coe hyouji ord2) = T.concat 
+  ["<li>"
+  , "ID: ", T.pack $ show sId
+  , ", K: ", T.pack $ show k
+  , ", N: ", T.pack $ show n
+  , ", order: ", T.pack $ show ord
+  , ", generator: ", T.pack $ stripQuotes (fmap show gene)
+  , ", P: ", T.pack $ stripQuotes (fmap show pp)
+  , ", P_coe: ", T.pack $ show pp_coe
+  , ", E: ", T.pack $ stripQuotes (fmap show ee)
+  , ", E_coe: ", T.pack $ show ee_coe
+  , ", H: ", T.pack $ stripQuotes (fmap show hh)
+  , ", H_coe: ", T.pack $ show hh_coe
+  , ", Element: ", T.pack $ show element
+  , ", gen_coe: ", T.pack $ show gen_coe
+  , ", hyouji: ", T.pack $ stripQuotes (fmap show hyouji)
+  , ", order2: ", T.pack $ show ord2
+  , "</li>"]
 
 stripQuotes :: Maybe String -> String
-stripQuotes (Just str) = "\\(" ++ (doubleBackslash . stripQuotesHelper) str ++ "\\)"
--- stripQuotes (Just str) = "\\(Lem5.14, \\ H(\\sigma_8)=\\iota_{15}\\alpha_{5}" ++ stripQuotesHelper str ++ "\\)"
+stripQuotes (Just str) = "\\(" 
+                      ++ (doubleBackslash . stripQuotesHelper) str 
+                      ++ "\\)"
 stripQuotes Nothing    = ""
 
 stripQuotesHelper :: String -> String
@@ -122,7 +133,7 @@ stripQuotesHelper str =
                   _        -> str
     _        -> str
 
--- バックスラッシュが1つの場合に2つに書き換える関数
+-- バックスラッシュを書き換える関数
 doubleBackslash :: String -> String
 doubleBackslash [] = []
 doubleBackslash (x:xs)
@@ -131,5 +142,13 @@ doubleBackslash (x:xs)
 -- doubleBackslash = concatMap (\c -> if c == '\\' then " \\" else [c])
 
 
+-- ToJSONインスタンスの定義
+instance ToJSON Sphere where
+  toJSON s = object 
+    [ "k" .= sphereK s
+    , "n" .= sphereN s
+    , "id" .= sphereId s
+    -- 他のフィールドも必要に応じて追加
+    ]
 
 
