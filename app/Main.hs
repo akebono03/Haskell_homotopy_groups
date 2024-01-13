@@ -19,7 +19,7 @@ data Sphere = Sphere
   { sphereK :: Int
   , sphereN :: Int
   , sphereId :: Int
-  , orders :: Either Int String  -- 整数または文字列を格納する Either 型
+  , orders :: Either String Int  -- 整数または文字列を格納する Either 型
   , generator :: Maybe String
   , p :: Maybe String
   , p_coe :: Maybe String
@@ -27,11 +27,10 @@ data Sphere = Sphere
   , e_coe :: Maybe String
   , h :: Maybe String
   , h_coe :: Maybe String
-  , element :: Maybe String
+  , element :: String
   , gen_coe :: Maybe String
   , hyouji :: Maybe String
-  , orders2 :: Either Int String  -- 整数または文字列を格納する Either 型
-  -- その他のカラムに対応するフィールドを追加
+  , orders2 :: Either String Int  -- 整数または文字列を格納する Either 型
   } deriving (Show)
 
 -- -- FromRow型クラスのインスタンスを作成
@@ -52,10 +51,6 @@ instance FromRow Sphere where
     <*> field -- gen_coe
     <*> field -- hyouji
     <*> (Left <$> field <|> Right <$> field) -- orders2
---   fromRow = Sphere <$> field <*> field <*> field <*> field <*> field 
---                    <*> field <*> field <*> field <*> field <*> field
---                    <*> field <*> field <*> field <*> field <*> field
-  -- 必要に応じて、他のフィールドに対応する field を追加
 
 -- 安全な整数変換関数
 readInt :: String -> Int
@@ -75,11 +70,9 @@ main = do
 appWithConnection :: Connection -> SpockM () () () ()
 appWithConnection conn = do
   middleware (staticPolicy (addBase "static"))
-
   Web.Spock.get root $ do
     templateContent <- liftIO $ TIO.readFile "static/template.html"
     html templateContent
-
   post "calculate" $ do
     formData <- params
     let n = maybe 0 (readInt . T.unpack) (lookup "n" formData)
@@ -93,13 +86,13 @@ appWithConnection conn = do
             :: ActionCtxT () (WebStateM () () ()) [Sphere]
     let htmlContent = generateHtmlForSphere spheres
         htmlString = T.unpack htmlContent
-
     -- 'template2.html' を読み込む
     templateContent <- liftIO $ TIO.readFile "static/template.html"
     -- プレースホルダーを実際の値で置換
     let finalHtml = 
           T.replace "{k}" (T.pack $ show k) $
           T.replace "{n}" (T.pack $ show n) $
+          T.replace "{nk}" (T.pack $ show (n+k)) $
           T.replace "{result}" (T.pack $ show result) $
           T.replace "{sphereList}" (T.pack $ htmlString) templateContent
     html finalHtml
@@ -109,33 +102,41 @@ generateHtmlForSphere :: [Sphere] -> T.Text
 generateHtmlForSphere spheres = T.concat
   -- HTMLを生成するコード
   [ "<html><head><title>Sphere</title></head><body>"
-  , "<h1>Sphere List</h1>"
   , "<ul>"
-  , T.concat $ map sphereToHtml spheres
+  , spheresToHtml spheres
   , "</ul>"
   , "</body></html>"
   ]
 
-sphereToHtml :: Sphere -> T.Text
-sphereToHtml (Sphere k n sId ord gene pp pp_coe ee ee_coe hh hh_coe
-              element gen_coe hyouji ord2) = T.concat 
-  ["<li>"
-  , "k: ", T.pack $ show k
-  , ", n: ", T.pack $ show n
-  , ", id: ", T.pack $ show sId
-  , ", order: ", T.pack $ show ord
-  , ", generator: ", T.pack $ stripQuotes (fmap show gene)
-  , ", P: ", T.pack $ stripQuotes (fmap show pp)
-  -- , ", P_coe: ", T.pack $ show pp_coe
-  , ", E: ", T.pack $ stripQuotes (fmap show ee)
-  -- , ", E_coe: ", T.pack $ show ee_coe
-  , ", H: ", T.pack $ stripQuotes (fmap show hh)
-  -- , ", H_coe: ", T.pack $ show hh_coe
-  , ", Element: ", T.pack $ show element
-  -- , ", gen_coe: ", T.pack $ show gen_coe
-  , ", hyouji: ", T.pack $ stripQuotes (fmap show hyouji)
-  , ", order2: ", T.pack $ show ord2
-  , "</li>"]
+-- Spheres を HTML リストアイテムに変換する関数
+spheresToHtml :: [Sphere] -> T.Text
+spheresToHtml spheres = T.concat
+    [ "<table border=\"1\">"
+    , "<tr>"
+    , "<th> id </th>"
+    , "<th> order </th>"
+    , "<th> generator </th>"
+    , "<th> P </th>"
+    , "<th> E </th>"
+    , "<th> H </th>"
+    , "<th> element </th>"
+    , "</tr>"
+    , T.concat [sphereRowToHtml sphere | sphere <- spheres]
+    , "</table>"
+    ]
+
+sphereRowToHtml :: Sphere -> T.Text
+sphereRowToHtml (Sphere _ _ sId ord gene pp _ ee _ hh _ element _ hyouji ord2) = T.concat
+    [ "<tr>"
+    , "<th>", T.pack $ show sId, "</th>"
+    , "<th>", T.pack $ showEither ord, "</th>"
+    , "<th>", T.pack $ stripQuotes (fmap show gene), "</th>"
+    , "<td>", T.pack $ stripQuotes (fmap show pp), "</td>"
+    , "<td>", T.pack $ stripQuotes (fmap show ee), "</td>"
+    , "<td>", T.pack $ stripQuotes (fmap show hh), "</td>"
+    , "<td>", T.pack $ show element, "</td>"
+    , "</tr>"
+    ]
 
 stripQuotes :: Maybe String -> String
 stripQuotes (Just str) = "\\(" 
@@ -157,16 +158,29 @@ doubleBackslash [] = []
 doubleBackslash (x:xs)
   | x == '\\' = " \\" ++ doubleBackslash xs
   | otherwise = [x] ++ doubleBackslash xs
--- doubleBackslash = concatMap (\c -> if c == '\\' then " \\" else [c])
 
+showEither :: Show a => Show b => Either a b -> String
+showEither (Left a)  = show a  -- Leftの場合は値を返す
+showEither (Right b) = show b  -- Rightの場合は値を表示
 
--- ToJSONインスタンスの定義
-instance ToJSON Sphere where
-  toJSON s = object 
-    [ "k" .= sphereK s
-    , "n" .= sphereN s
-    , "id" .= sphereId s
-    -- 他のフィールドも必要に応じて追加
-    ]
-
+-- sphereToHtml :: Sphere -> T.Text
+-- sphereToHtml (Sphere k n sId ord gene pp pp_coe ee ee_coe hh hh_coe
+--               element gen_coe hyouji ord2) = T.concat 
+--   ["<li>"
+--   , "k: ", T.pack $ show k
+--   , ", n: ", T.pack $ show n
+--   , ", id: ", T.pack $ show sId
+--   , ", order: ", T.pack $ show ord
+--   , ", generator: ", T.pack $ stripQuotes (fmap show gene)
+--   , ", P: ", T.pack $ stripQuotes (fmap show pp)
+--   -- , ", P_coe: ", T.pack $ show pp_coe
+--   , ", E: ", T.pack $ stripQuotes (fmap show ee)
+--   -- , ", E_coe: ", T.pack $ show ee_coe
+--   , ", H: ", T.pack $ stripQuotes (fmap show hh)
+--   -- , ", H_coe: ", T.pack $ show hh_coe
+--   , ", Element: ", T.pack $ show element
+--   -- , ", gen_coe: ", T.pack $ show gen_coe
+--   , ", hyouji: ", T.pack $ stripQuotes (fmap show hyouji)
+--   , ", order2: ", T.pack $ show ord2
+--   , "</li>"]
 
