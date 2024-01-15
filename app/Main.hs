@@ -84,8 +84,10 @@ appWithConnection conn = do
         \FROM sphere WHERE n = ? and k = ?"
     spheres <- liftIO $ query conn queryStr (n, k) 
             :: ActionCtxT () (WebStateM () () ()) [Sphere]
-    let htmlContent = generateHtmlForSphere spheres
-        htmlString = T.unpack htmlContent
+    -- let htmlContent = generateHtmlForSphere conn spheres
+    --     htmlString = T.unpack htmlContent
+    htmlContent <- liftIO $ generateHtmlForSphere conn spheres
+    let htmlString = T.unpack htmlContent
     -- 'template2.html' を読み込む
     templateContent <- liftIO $ TIO.readFile "static/template.html"
     -- プレースホルダーを実際の値で置換
@@ -98,19 +100,25 @@ appWithConnection conn = do
     html finalHtml
     
 -- Sphere のリストを HTML に変換する関数
-generateHtmlForSphere :: [Sphere] -> T.Text
-generateHtmlForSphere spheres = T.concat
-  -- HTMLを生成するコード
-  [ "<html><head><title>Sphere</title></head><body>"
-  , "<ul>"
-  , spheresToHtml spheres
-  , "</ul>"
-  , "</body></html>"
-  ]
+generateHtmlForSphere :: Connection -> [Sphere] -> IO T.Text
+generateHtmlForSphere conn spheres = do
+  sphereHtml <- spheresToHtml conn spheres
+  return $ T.concat
+    -- HTMLを生成するコード
+    [ "<html><head><title>Sphere</title></head><body>"
+    , "<ul>"
+    , sphereHtml
+    -- , spheresToHtml conn spheres
+    , "</ul>"
+    , "</body></html>"
+    ]
 
 -- Spheres を HTML リストアイテムに変換する関数
-spheresToHtml :: [Sphere] -> T.Text
-spheresToHtml spheres = T.concat
+spheresToHtml :: Connection -> [Sphere] -> IO T.Text
+spheresToHtml conn spheres = do
+  -- rows <- mapM (sphereRowToHtml conn) spheres
+  rows <- mapM (sphereRowToHtml conn) spheres
+  return $ T.concat
     [ "<table border=\"1\">"
     , "<tr>"
     , "<th> id </th>"
@@ -121,12 +129,16 @@ spheresToHtml spheres = T.concat
     , "<th> H </th>"
     , "<th> element </th>"
     , "</tr>"
-    , T.concat [sphereRowToHtml sphere | sphere <- spheres]
+    , T.concat rows
+    -- , T.concat [sphereRowToHtml conn sphere | sphere <- spheres]
     , "</table>"
     ]
 
-sphereRowToHtml :: Sphere -> T.Text
-sphereRowToHtml (Sphere _ _ sId ord gene pp _ ee _ hh _ element _ hyouji ord2) = T.concat
+sphereRowToHtml :: Connection -> Sphere -> IO T.Text
+sphereRowToHtml conn (Sphere _ _ sId ord gene pp _ ee _ hh _ element _ hyouji ord2) = do
+  latexList <- liftIO $ getLatexList conn $ stringToList element
+  let latexText = T.concat $ map T.pack latexList
+  return $ T.concat
     [ "<tr>"
     , "<th>", T.pack $ show sId, "</th>"
     , "<th>", T.pack $ showEither ord, "</th>"
@@ -134,9 +146,20 @@ sphereRowToHtml (Sphere _ _ sId ord gene pp _ ee _ hh _ element _ hyouji ord2) =
     , "<td>", T.pack $ stripQuotes (fmap show pp), "</td>"
     , "<td>", T.pack $ stripQuotes (fmap show ee), "</td>"
     , "<td>", T.pack $ stripQuotes (fmap show hh), "</td>"
-    , "<td>", T.pack $ show element, "</td>"
+    -- , "<td>", T.pack $ show $ stringToList element, "</td>"
+    -- , "<td>", do
+    --     latexList <- liftIO $ getLatexList conn $ stringToList element
+    --     return $ T.concat $ map T.pack latexList
+    -- , "</td>"
+    -- , "<td>", latexText, "</td>"
+    -- , "<td>", T.pack $ stripQuotes (fmap show latexText), "</td>"
+        , "<td>", T.concat ["\\(", latexText, "\\)"] , "</td>"
     , "</tr>"
     ]
+  -- where
+  --   latexText = do :: T.Text
+  --       latexList <- liftIO $ getLatexList conn $ stringToList element
+  --       return $ T.concat $ map T.pack latexList
 
 stripQuotes :: Maybe String -> String
 stripQuotes (Just str) = "\\(" 
@@ -162,6 +185,27 @@ doubleBackslash (x:xs)
 showEither :: Show a => Show b => Either a b -> String
 showEither (Left a)  = show a  -- Leftの場合は値を返す
 showEither (Right b) = show b  -- Rightの場合は値を表示
+
+elId :: Connection -> Int -> IO String
+elId conn id = do
+  [Only res] <- query conn "SELECT latex FROM gen WHERE id = ?" (Only id)
+  return res
+
+-- 空白で分割してリストに変換する関数
+stringToList :: String -> [Int]
+stringToList input = map read (words input)
+
+-- [Int] から [String] へ変換する関数
+getLatexList :: Connection -> [Int] -> IO [String]
+getLatexList conn ids = do
+  let queryStr = "SELECT latex FROM gen WHERE id = ?"
+  results <- mapM (query conn queryStr . Only) ids
+  -- results は [Only String] のリストになります
+  -- Only コンストラクタから値を取り出して [String] に変換
+  return [res | Only res <- concat results]
+
+
+
 
 -- sphereToHtml :: Sphere -> T.Text
 -- sphereToHtml (Sphere k n sId ord gene pp pp_coe ee ee_coe hh hh_coe
