@@ -81,6 +81,14 @@ instance FromRow Gen where
     <*> field -- genStable
     <*> field -- genStableOrders
 
+data HomotopyGroupOfShpere = HomotopyGroupOfShpere { k :: Int, n :: Int }
+
+data Order = Finite Int | Infinite
+  deriving (Show, Eq)
+
+type Tex = String
+type ElTex = String
+
 -- 安全な整数変換関数
 readInt :: String -> Int
 readInt s = maybe 0 id (readMaybe s :: Maybe Int)
@@ -126,7 +134,6 @@ appWithConnection conn = do
     gens <- liftIO $ getGenerators conn queryRs n
     -- gens <- liftIO $ getElTexs conn queryRs
     let groupGeneratorTex = intercalate "\\oplus " [gr ++ "\\{" ++ gen ++ "\\}" | (gr, gen) <- zip groupList gens]
-
 
     -- groups <- liftIO $ getGroups conn queryRs
     -- let groupString = texToString $ groupsToGroupTex groups
@@ -233,11 +240,10 @@ ordersToString (Left str)   = str
 ordersToString (Right ords) = concat $ map orderToString ords
 -- ordersToString (Right ords) = listToString $ map orderToString ords
 
-type Tex = String
 
 ordersToGroupList :: Either String [Order] -> [Tex]
 ordersToGroupList (Left str) = [str]
-ordersToGroupList (Right ords) = ["Z_{" ++ orderToString ord ++ "}" | ord <- ords]
+ordersToGroupList (Right ords) = [if ord == Infinite then "Z" else "Z_{" ++ orderToString ord ++ "}" | ord <- ords]
 
 ordersToGroupTex :: Either String [Order] -> Tex
 ordersToGroupTex (Left str)   = str
@@ -320,42 +326,72 @@ elSqList elList =
   where
     groupList = group elList
 
+
 elToTex :: Connection -> Int -> [Int] -> IO ElTex
 elToTex conn nn elementList = do
-  -- let elementList = stringToList element
-  latexList <- liftIO $ getLatexList conn elementList
-  elemDimList <- liftIO $ elDimList conn nn elementList
-  elemSusList <- liftIO $ elSusList conn nn elementList
+  latexList    <- liftIO $ getLatexList conn elementList
+  elemDimList  <- liftIO $ elDimList conn nn elementList
+  elemSusList  <- liftIO $ elSusList conn nn elementList
   elemKindList <- liftIO $ elKindList conn elementList
-  let
-    elemSqList = elSqList elementList
-    makeTex latex dim sus kind sq
-      | kind == 0 =
-        if sq == 0
-          then ""
-          else if sq == 1
-            then if last latex == ','
-              then latex ++ show dim ++ "}"
-              else latex ++ "_{" ++ show dim ++ "}"
-            else if last latex == ','
-              then latex ++ show dim ++ "}^{" ++ show sq ++ "}" 
-              else latex ++ "_{" ++ show dim ++ "}^{" ++ show sq ++ "}"
-      | kind == 1 =
-        case sus of
-          0 -> latex
-          1 -> "E " ++ latex
-          _ -> "E^{" ++ show sus ++ "}" ++ latex
-      | otherwise = "Not defined"
-    tmpList = [makeTex latex dim sus kind sq | (latex,dim,sus,kind,sq) <- zip5 latexList elemDimList elemSusList elemKindList elemSqList]
-    res = intercalate "" tmpList
-  return res
-    -- makeTex latex dim sus kind sq
-    --   | kind == 1 && sus == 0          = latex
-    --   | kind == 1 && sus == 1          = "E " ++ latex
-    --   | kind == 1 && sus >= 2          = "E^{" ++ show sus ++ "}" ++ latex
-    --   | kind == 0 && last latex /= ',' = if sq == 1 then latex ++ "_{" ++ show dim ++ "}" else 
-    --   | kind == 0 && last latex == ',' = latex ++ show dim ++ "}"
-    --   | otherwise                      = "Not defined"
+  let elemSqList = elSqList elementList
+  let texList = zip5 latexList elemDimList elemSusList elemKindList elemSqList
+  return $ intercalate "" (map makeTex texList)
+
+makeTex :: (String, Int, Int, Int, Int) -> String
+makeTex (latex, dim, sus, kind, sq) = case kind of
+  0 -> texKindZero latex dim sq
+  1 -> texKindOne latex sus
+  _ -> "Not defined"
+
+texKindZero :: String -> Int -> Int -> String
+texKindZero latex dim sq
+  | sq == 0   = ""
+  | otherwise = latexFormat latex dim sq
+
+latexFormat :: String -> Int -> Int -> String
+latexFormat latex dim sq
+  | sq == 1 && last latex == ',' = latex ++ show dim ++ "}"
+  | sq == 1 && last latex /= ',' = latex ++ "_{" ++ show dim ++ "}"
+  | last latex == ','            = latex ++ show dim ++ "}^{" ++ show sq ++ "}"
+  | otherwise                    = latex ++ "_{" ++ show dim ++ "}^{" ++ show sq ++ "}"
+
+texKindOne :: String -> Int -> String
+texKindOne latex sus
+  | sus == 0  = latex
+  | sus == 1  = "E " ++ latex
+  | otherwise = "E^{" ++ show sus ++ "}" ++ latex
+
+-- elToTex :: Connection -> Int -> [Int] -> IO ElTex
+-- elToTex conn nn elementList = do
+--   -- let elementList = stringToList element
+--   latexList <- liftIO $ getLatexList conn elementList
+--   elemDimList <- liftIO $ elDimList conn nn elementList
+--   elemSusList <- liftIO $ elSusList conn nn elementList
+--   elemKindList <- liftIO $ elKindList conn elementList
+--   let
+--     elemSqList = elSqList elementList
+--     makeTex latex dim sus kind sq
+--       | kind == 0 =
+--         if sq == 0
+--           then ""
+--           else if sq == 1
+--             then if last latex == ','
+--               then latex ++ show dim ++ "}"
+--               else latex ++ "_{" ++ show dim ++ "}"
+--             else if last latex == ','
+--               then latex ++ show dim ++ "}^{" ++ show sq ++ "}" 
+--               else latex ++ "_{" ++ show dim ++ "}^{" ++ show sq ++ "}"
+--       | kind == 1 =
+--         case sus of
+--           0 -> latex
+--           1 -> "E " ++ latex
+--           _ -> "E^{" ++ show sus ++ "}" ++ latex
+--       | otherwise = "Not defined"
+--     tmpList = [makeTex latex dim sus kind sq | (latex,dim,sus,kind,sq) <- zip5 latexList elemDimList elemSusList elemKindList elemSqList]
+--     res = intercalate "" tmpList
+--   return res
+
+
 
 getGenerators :: Connection -> Query -> Int -> IO [ElTex]
 getGenerators conn queryRs nn = do
@@ -367,7 +403,6 @@ convertToTex conn nn sphere = elToTex conn nn $ stringToList (element sphere)
 -- convertToTex conn nn sphere = case element sphere of
 --   elToTex conn nn $ stringToList element
 
-data HomotopyGroupOfShpere = HomotopyGroupOfShpere { k :: Int, n :: Int }
 
 piTex :: HomotopyGroupOfShpere -> String
 piTex mt = "\\pi_{" ++ show (n mt + k mt) ++ "}^{" ++ show (n mt) ++ "}"
@@ -394,8 +429,6 @@ queryCount k n
 stringToQuery :: String -> Query
 stringToQuery str = Query $ T.pack str
 
-data Order = Finite Int | Infinite
-  deriving (Show, Eq)
 
 convertToOrder :: Sphere -> Order
 convertToOrder sphere = case orders sphere of
@@ -414,7 +447,6 @@ getOrders conn query = catch (do
     handler :: SomeException -> IO (Either String [Order])
     handler err = return $ Left $ "Error: " ++ show err
 
-type ElTex = String
 
 
 -- -- queryRs から ElTex のリストを得る。
