@@ -24,7 +24,7 @@ import Control.Applicative ((<|>))
 import Control.Monad
 import Control.Exception (SomeException, catch)
 -- リスト操作に関連するユーティリティ
-import Data.List (intercalate, zip4, zip5, group)
+import Data.List (intercalate, zip4, zip5, group, isPrefixOf)
 
 -- Sphere 型の定義（ホモトピー群のデータを表す）
 data Sphere = Sphere
@@ -40,7 +40,7 @@ data Sphere = Sphere
   , h :: Maybe String
   , h_coe :: Maybe String
   , element :: String
-  , gen_coe :: Maybe String
+  , gen_coe :: String
   , hyouji :: Maybe String
   , orders2 :: Either Int String  -- 整数または文字列を格納する Either 型
   } deriving (Show)
@@ -123,9 +123,8 @@ appWithConnection conn = do
         \FROM sphere WHERE n = ? and k = ?"
     spheres <- liftIO $ query conn queryStr (n, k) 
             :: ActionCtxT () (WebStateM () () ()) [Sphere]
-    -- SphereのリストをHTMLに変換
-    htmlContent <- liftIO $ generateHtmlForSphere conn spheres
-    let htmlString = T.unpack htmlContent
+
+
     -- 'template2.html' を読み込む
     templateContent <- liftIO $ TIO.readFile "static/template.html"
     -- プレースホルダーを実際の値で置換
@@ -133,8 +132,17 @@ appWithConnection conn = do
     ords <- liftIO $ getOrders conn queryRs
     let ordsString = texToString $ ordersToGroupTex ords
     let groupList = ordersToGroupList ords
-    gens <- liftIO $ getGenerators conn queryRs n
+    elems <- liftIO $ getGenerators conn queryRs n
+
+    genCoes <- liftIO $ getGenCoes conn queryRs
+    let genCoeLists = map stringToList genCoes
+        gens = map (linearCombination elems) genCoeLists
+
     let groupGeneratorTex = intercalate "\\oplus " [gr ++ "\\{" ++ gen ++ "\\}" | (gr, gen) <- zip groupList gens]
+
+    -- SphereのリストをHTMLに変換
+    htmlContent <- liftIO $ generateHtmlForSphere conn elems spheres
+    let htmlString = T.unpack htmlContent
     let finalHtml = 
           T.replace "{k}" (T.pack $ show k) $
           T.replace "{n}" (T.pack $ show n) $
@@ -142,13 +150,14 @@ appWithConnection conn = do
           T.replace "{result}" (T.pack $ show result) $
           T.replace "{sphereList}" (T.pack $ htmlString) $
           T.replace "{group}" (T.pack $ "\\(" ++ groupGeneratorTex ++ "\\)") templateContent
+
     -- 最終的なHTMLをレスポンスとして返す
     html finalHtml
     
 -- Sphere のリストを HTML に変換する関数
-generateHtmlForSphere :: Connection -> [Sphere] -> IO T.Text
-generateHtmlForSphere conn spheres = do
-  sphereHtml <- spheresToHtml conn spheres
+generateHtmlForSphere :: Connection -> [String] -> [Sphere] -> IO T.Text
+generateHtmlForSphere conn elems spheres = do
+  sphereHtml <- spheresToHtml conn elems spheres
   return $ T.concat
     -- HTMLを生成するコード
     [ "<html><head><title>Sphere</title></head><body>"
@@ -159,9 +168,9 @@ generateHtmlForSphere conn spheres = do
     ]
 
 -- Spheres を HTML リストアイテムに変換する関数
-spheresToHtml :: Connection -> [Sphere] -> IO T.Text
-spheresToHtml conn spheres = do
-  rows <- mapM (sphereRowToHtml conn) spheres
+spheresToHtml :: Connection -> [String] -> [Sphere] -> IO T.Text
+spheresToHtml conn elems spheres = do
+  rows <- mapM (sphereRowToHtml conn elems) spheres
   return $ T.concat
     [ "<table border=\"1\">"
     , "<tr>"
@@ -178,8 +187,8 @@ spheresToHtml conn spheres = do
     ]
 
 -- SphereオブジェクトをHTMLテーブルの行に変換する関数
-sphereRowToHtml :: Connection -> Sphere -> IO T.Text
-sphereRowToHtml conn (Sphere kk nn sId ord gene pp _ ee _ hh _ element _ hyouji ord2) = do
+sphereRowToHtml :: Connection -> [String] -> Sphere -> IO T.Text
+sphereRowToHtml conn elems (Sphere kk nn sId ord gene pp _ ee _ hh _ element genCoe hyouji ord2) = do
   -- Sphereオブジェクトから個々のデータを取得し、HTML形式に変換
   let elementList = stringToList element
   latexList <- liftIO $ getLatexList conn elementList
@@ -194,6 +203,8 @@ sphereRowToHtml conn (Sphere kk nn sId ord gene pp _ ee _ hh _ element _ hyouji 
       -- piTex_k_n = T.pack $ piTex pi_k_n
       queryCnt = queryCount kk nn
       queryRs = queryRows kk nn
+      genCoeList = stringToList genCoe
+      genTex = linearCombination elems genCoeList
   dSum <- liftIO $ directSum conn queryCnt
   ords <- liftIO $ getOrders conn queryRs
   elTex <- liftIO $ elToTex conn nn elementList
@@ -203,7 +214,7 @@ sphereRowToHtml conn (Sphere kk nn sId ord gene pp _ ee _ hh _ element _ hyouji 
     [ "<tr>"
     , "<th>", T.pack $ show sId, "</th>"
     , "<th>", T.pack $ showEither ord, "</th>"
-    , "<th>", T.pack $ "\\(" ++ elTex ++ "\\)" , "</th>"
+    , "<th>", T.pack $ "\\(" ++ genTex ++ "\\)" , "</th>"
     , "<td>", T.pack $ stripQuotes (fmap show pp), "</td>"
     , "<td>", T.pack $ stripQuotes (fmap show ee), "</td>"
     , "<td>", T.pack $ stripQuotes (fmap show hh), "</td>"
@@ -380,6 +391,31 @@ texKindOne latex sus
   | sus == 1  = "E " ++ latex
   | otherwise = "E^{" ++ show sus ++ "}" ++ latex
 
+-- 生成元のリストと係数のリストから線形結合の文字列を生成する関数
+linearCombination :: [String] -> [Int] -> String
+linearCombination generators coefficients
+  | length generators == length cutCoefficients = result
+  | otherwise = "Invalid input: Generators and coefficients must have the same length."
+  where
+    cutCoefficients = take (length generators) coefficients
+    -- 線形結合の生成
+    result = formatCombination $ zipWith formatTerm generators cutCoefficients
+    -- 1つの項を整形する関数
+    formatTerm generator coefficient
+      | coefficient == 0 = ""  -- 係数が0の場合は項を無視
+      | coefficient == 1 = generator
+      | coefficient == -1 = "-" ++ generator
+      | otherwise = show coefficient ++ generator  -- その他の場合は "+" を付ける
+    -- 線形結合全体を整形する関数
+    formatCombination terms = replaceString "+-" "-" $ intercalate "+" $ filter (not . null) terms
+
+-- 文字列を置き換える関数
+replaceString :: String -> String -> String -> String
+replaceString _ _ [] = []  -- 空文字列の場合は何もしない
+replaceString target replacement inputStr@(x:xs)
+    | target `isPrefixOf` inputStr = replacement ++ replaceString target replacement (drop (length target) inputStr)
+    | otherwise = x : replaceString target replacement xs
+
 -- 特定のクエリに基づいてデータベースから生成元の情報を取得する関数
 getGenerators :: Connection -> Query -> Int -> IO [ElTex]
 getGenerators conn queryRs nn = do
@@ -438,6 +474,11 @@ getOrders conn query = catch (do
     handler :: SomeException -> IO (Either String [Order])
     handler err = return $ Left $ "Error: " ++ show err
 
+getGenCoes :: Connection -> Query -> IO [String]
+getGenCoes conn query = do
+    rows <- query_ conn query :: IO [Sphere]
+    let genCoes = map gen_coe rows
+    return genCoes
 
 
 
