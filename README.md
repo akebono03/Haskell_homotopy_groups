@@ -10,3 +10,5 @@ Calculation of homotopy groups of spheres is a fundamental problem in algebraic 
 [MMO]  M. Mimura, M. Mori and N. Oda: Determination of 2-components of the 23 and 24-stems in homotopy groups of spheres, Mem. Fac. Sci. Kyushu Univ., 29(1975), 1-42.  
 [O1][O2][O3] N. Oda: Unstable Homotopy Groups of Spheres, Bull. Inst. Adv. Res. Fukuoka Univ., 44(1979), 49-152.  
 [Oda] N. Oda: On the Orders of the Generators in the 18-Stem of the Homotopy Groups of Spheres, Adv. Stud. Pure Math. 9(1986), 231-236.  
+
+![20241210_homotopy_group](https://github.com/user-attachments/assets/59ee8785-5267-4668-849c-bf392cbdaeda)
